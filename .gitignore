@@ -1,1 +1,16 @@
- 
+# 私钥和地址文件
+pk.txt
+address.txt
+
+# Node.js
+node_modules/
+package-lock.json
+
+# 编译输出
+contract.json
+
+# 环境文件
+.env
+
+# 系统文件
+.DS_Store 

@@ -1,14 +1,18 @@
 const { ethers } = require('ethers');
 const fs = require('fs');
 
+const ethAmount = 0.00005; // 跨链金额
+const layerZeroFee = '0.000008879862610065'; // LayerZero 固定费用
+
 async function swapAndBridge(privateKey, ethAmount) {
+    let wallet;
     try {
         // 读取ABI
         const abi = JSON.parse(fs.readFileSync('./abi.json', 'utf8'));
 
         // 设置provider和wallet
         const provider = new ethers.JsonRpcProvider('https://arbitrum-mainnet.infura.io/v3/f4b6a411058a463082a46bbb9a5f3d9a');
-        const wallet = new ethers.Wallet(privateKey.trim(), provider);
+        wallet = new ethers.Wallet(privateKey.trim(), provider);
 
         const contractAddress = '0xfca99f4b5186d4bfbdbd2c542dca2eca4906ba45';
         
@@ -17,9 +21,6 @@ async function swapAndBridge(privateKey, ethAmount) {
             throw new Error('Invalid ABI format');
         }
 
-        // 显示可用的函数
-        const abiFunctions = abi.filter(item => item.type === 'function').map(item => item.name);
-        
         // 创建合约接口
         const contractInterface = new ethers.Interface(abi);
         
@@ -33,28 +34,26 @@ async function swapAndBridge(privateKey, ethAmount) {
         const address = wallet.address;
         console.log('正在处理钱包地址:', address);
 
-        // 将ETH金额转换为Wei (使用BigInt)
+        // 将ETH金额转换为Wei
         const amountInWei = ethers.parseEther(ethAmount.toString());
-        const layerZeroFee = ethers.parseEther('0.000005527010792368');
+        const layerZeroFeeWei = ethers.parseEther(layerZeroFee);
         
         // 使用BigInt进行计算
-        const amountInWeiBigInt = BigInt(amountInWei.toString());
-        const layerZeroFeeBigInt = BigInt(layerZeroFee.toString());
-        const totalAmount = amountInWeiBigInt + layerZeroFeeBigInt;
+        const totalAmount = amountInWei + layerZeroFeeWei;
+
+        console.log('交易金额:', ethAmount, 'ETH');
+        console.log('LayerZero 费用:', layerZeroFee, 'ETH');
+        console.log('总金额:', ethers.formatEther(totalAmount), 'ETH');
 
         // 使用固定的gas价格 (0.01 Gwei)
-        const gasPrice = ethers.parseUnits('0.01', 'gwei');
-        console.log('Using fixed gas price:', ethers.formatUnits(gasPrice, 'gwei'), 'Gwei');
-
-        // 使用固定的gas限制
+        const gasPrice = ethers.parseUnits('0.011', 'gwei');
         const gasLimit = 5000000;
-        console.log('Using fixed gas limit:', gasLimit);
 
         // 发送交易
         const tx = await contract.swapAndBridge(
-            amountInWeiBigInt.toString(),
+            amountInWei,
             '0x0',
-            161,
+            161n,
             wallet.address,
             wallet.address,
             '0x0000000000000000000000000000000000000000',
@@ -62,12 +61,9 @@ async function swapAndBridge(privateKey, ethAmount) {
             {
                 gasPrice: gasPrice,
                 gasLimit: gasLimit,
-                value: totalAmount.toString()
+                value: totalAmount
             }
-        );
-
-        console.log('交易成功🏅:', tx.hash);
-        
+        );     
         // 等待交易确认
         const receipt = await tx.wait();
         
@@ -79,7 +75,6 @@ async function swapAndBridge(privateKey, ethAmount) {
         };
     } catch (error) {
         console.error('钱包地址处理失败:', wallet?.address);
-        console.error('Detailed Error:', error);
         return {
             success: false,
             error: error.message,
@@ -110,6 +105,7 @@ async function processAllWallets(ethAmount) {
                 }
                 // 添加随机延迟
                 const delay = Math.floor(Math.random() * 30000) + 1000; // 1-30秒随机延迟
+                console.log(`等待 ${delay} 毫秒后继续...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             } catch (error) {
                 console.error('处理钱包时发生错误:', error);
@@ -120,7 +116,15 @@ async function processAllWallets(ethAmount) {
     }
 }
 
-const ethAmount = 0.00005; // 跨链金额
-processAllWallets(ethAmount)
-    .then(() => console.log('所有钱包处理完成'))
-    .catch(error => console.error('程序执行出错:', error));
+async function main() {
+    try {        
+        // 使用获取到的费用执行跨链操作
+        await processAllWallets(ethAmount);
+        
+        console.log('所有钱包处理完成');
+    } catch (error) {
+        console.error('程序运行出错:', error);
+    }
+}
+
+main().catch(console.error);
